@@ -1028,6 +1028,7 @@
     const lightboxImage = $("lightbox-image");
     const lightboxCaption = $("lightbox-caption");
     const lightboxClose = $("lightbox-close");
+    const imageVersion = "20260421-imgopt";
     $("source-card").innerHTML = `这份网页当前读取的是知识库里的 <code>${escapeHtml(data.meta.sourceNote)}</code>。以后你只要改这份笔记，再让我执行一次同步脚本，网站内容就会一起刷新。最近同步时间：<code>${escapeHtml(data.meta.generatedAt)}</code>`;
 
     function escapeHtml(text) {
@@ -1045,6 +1046,12 @@
       value = value.replace(/`([^`]+)`/g, "<code>$1</code>");
       value = value.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
       return value;
+    }
+
+    function versionedImageSrc(src) {
+      if (!src) return "";
+      const separator = src.includes("?") ? "&" : "?";
+      return `${src}${separator}v=${imageVersion}`;
     }
 
     function renderMarkdown(markdown) {
@@ -1428,7 +1435,7 @@
         button.setAttribute("aria-label", `查看大图：${photo.caption}`);
         const credit = photo.credit ? ` · ${photo.credit}` : "";
         button.innerHTML = `
-          <img src="${photo.src}" alt="${escapeHtml(photo.alt)}" loading="lazy" />
+          <img src="${versionedImageSrc(photo.src)}" alt="${escapeHtml(photo.alt)}" loading="lazy" />
           <span class="gallery-caption">${escapeHtml(photo.caption + credit)}</span>
         `;
         button.addEventListener("click", () => openLightbox(photo));
@@ -1437,7 +1444,7 @@
     }
 
     function openLightbox(photo) {
-      lightboxImage.src = photo.src;
+      lightboxImage.src = versionedImageSrc(photo.src);
       lightboxImage.alt = photo.alt;
       const credit = photo.credit ? ` · ${escapeHtml(photo.credit)}` : "";
       const sourceLink = photo.sourceUrl

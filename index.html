@@ -1,0 +1,1568 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>北京太原周末自驾地图</title>
+  <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="%23f1dfc4"/><path d="M18 45c7-18 20-18 28-26" fill="none" stroke="%23b16d22" stroke-width="7" stroke-linecap="round"/><circle cx="18" cy="45" r="6" fill="%23c84b3f"/><circle cx="46" cy="19" r="6" fill="%232e9561"/></svg>' />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <style>
+    @font-face {
+      font-family: "Trip Serif SC";
+      src: url("assets/fonts/noto-serif-sc-trip.ttf") format("truetype");
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    :root {
+      color-scheme: light;
+      --bg: #ebe1d2;
+      --paper: rgba(251, 247, 239, 0.92);
+      --paper-solid: #faf5ec;
+      --ink: #241d16;
+      --muted: #756656;
+      --line: rgba(74, 55, 28, 0.12);
+      --accent: #b16d22;
+      --accent-soft: rgba(177, 109, 34, 0.14);
+      --shadow: 0 24px 56px rgba(49, 33, 14, 0.18);
+      --card-shadow: 0 16px 34px rgba(53, 36, 16, 0.08);
+      --panel-offset: 0px;
+      --day-color: #d84f45;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top left, rgba(205, 160, 98, 0.2), transparent 24%),
+        radial-gradient(circle at top right, rgba(163, 108, 62, 0.1), transparent 18%),
+        linear-gradient(180deg, #f4ede1 0%, #e7dccb 100%);
+      color: var(--ink);
+      font-family: "PingFang SC", "Noto Serif SC", "Hiragino Sans GB", -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(92, 62, 21, 0.04) 0 1px, transparent 1px 100%),
+        linear-gradient(rgba(92, 62, 21, 0.03) 0 1px, transparent 1px 100%);
+      background-size: 28px 28px;
+      opacity: 0.22;
+    }
+
+    .app-shell {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(360px, 460px);
+      height: 100vh;
+      isolation: isolate;
+    }
+
+    .map-stage {
+      position: relative;
+      min-width: 0;
+      overflow: hidden;
+      background: #d9ccb8;
+    }
+
+    .map-stage::before {
+      content: "";
+      position: absolute;
+      inset: 18px 18px auto auto;
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(250, 242, 229, 0.3) 0%, rgba(250, 242, 229, 0) 72%);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      filter: saturate(0.94) contrast(1.02) brightness(1.01);
+    }
+
+    .mobile-map-hitarea {
+      display: none;
+    }
+
+    .map-stage::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, rgba(34, 25, 16, 0.18) 0%, rgba(34, 25, 16, 0.02) 32%, rgba(34, 25, 16, 0.12) 100%);
+    }
+
+    .map-label {
+      background: rgba(252, 248, 241, 0.94);
+      border: 1px solid rgba(72, 53, 30, 0.14);
+      border-radius: 12px;
+      color: #3b2c1d;
+      box-shadow: 0 10px 22px rgba(61, 43, 18, 0.1);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      padding: 4px 8px;
+    }
+
+    .leaflet-tooltip-top::before,
+    .leaflet-tooltip-bottom::before,
+    .leaflet-tooltip-left::before,
+    .leaflet-tooltip-right::before {
+      border: none !important;
+    }
+
+    .day-marker {
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      border: 2px solid rgba(255, 249, 239, 0.94);
+      box-shadow: 0 10px 20px rgba(43, 28, 13, 0.18);
+    }
+
+    .panel {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding: 24px 24px 18px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top, rgba(201, 152, 86, 0.16), transparent 24%),
+        linear-gradient(180deg, rgba(252, 247, 239, 0.98) 0%, rgba(244, 236, 223, 0.985) 100%);
+      border-left: 1px solid rgba(84, 60, 28, 0.08);
+      box-shadow: -18px 0 38px rgba(38, 25, 12, 0.08);
+      backdrop-filter: blur(18px);
+    }
+
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 18px 18px 18px 0;
+      pointer-events: none;
+      border-radius: 28px;
+      border: 1px solid rgba(123, 88, 44, 0.08);
+      opacity: 0.6;
+    }
+
+    .panel::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 14%),
+        radial-gradient(circle at 20% 0%, rgba(255, 248, 239, 0.2), transparent 26%);
+      opacity: 0.9;
+    }
+
+    .panel-handle {
+      display: none;
+    }
+
+    .panel-top {
+      position: relative;
+      z-index: 1;
+      padding-right: 4px;
+    }
+
+    .panel-kicker {
+      margin: 0;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(110, 87, 58, 0.72);
+    }
+
+    .panel-title {
+      margin: 10px 0 6px;
+      font-family: "Trip Serif SC", "Noto Serif SC", "Songti SC", serif;
+      font-size: 30px;
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+    }
+
+    .panel-subtitle {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--muted);
+    }
+
+    .day-tabs {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      gap: 10px;
+      padding: 2px 0 16px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+    }
+
+    .day-tabs::-webkit-scrollbar {
+      display: none;
+    }
+
+    .day-tab {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 86px;
+      padding: 11px 15px;
+      border: 1px solid rgba(72, 53, 30, 0.07);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      color: #3b2f21;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+    }
+
+    .day-tab:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 18px rgba(57, 39, 17, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    }
+
+    .day-tab.is-active {
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--day-color) 10%, rgba(255, 252, 248, 0.98)), rgba(255, 250, 243, 0.94));
+      border-color: color-mix(in srgb, var(--day-color) 52%, rgba(72, 53, 30, 0.08));
+      box-shadow: 0 12px 22px rgba(57, 39, 17, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+      color: color-mix(in srgb, var(--day-color) 68%, #37291c);
+    }
+
+    .day-tab-label {
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: 0.01em;
+    }
+
+    .day-content {
+      position: relative;
+      z-index: 1;
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 4px;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(145, 112, 68, 0.32) transparent;
+    }
+
+    .day-content-inner {
+      padding-bottom: 28px;
+    }
+
+    .day-header {
+      position: relative;
+      padding: 20px 22px 22px;
+      border-radius: 30px;
+      color: #fff8f2;
+      background:
+        linear-gradient(145deg, color-mix(in srgb, var(--day-color) 92%, #664226 8%), color-mix(in srgb, var(--day-color) 68%, #22170d 32%)),
+        radial-gradient(circle at top right, rgba(255, 255, 255, 0.22), transparent 34%);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .day-header::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 24%),
+        radial-gradient(circle at 0% 0%, rgba(255, 248, 240, 0.16), transparent 28%);
+      pointer-events: none;
+    }
+
+    .day-header::after {
+      content: "";
+      position: absolute;
+      left: 22px;
+      right: 22px;
+      bottom: 0;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(255, 244, 230, 0.28), rgba(255, 244, 230, 0));
+      pointer-events: none;
+    }
+
+    .day-header-top {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .day-header-kicker {
+      margin: 0 0 8px;
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(255, 243, 228, 0.82);
+    }
+
+    .day-header-title {
+      margin: 0;
+      font-family: "Trip Serif SC", "Noto Serif SC", "Songti SC", serif;
+      font-size: clamp(28px, 3vw, 38px);
+      line-height: 1.02;
+      letter-spacing: -0.03em;
+      overflow-wrap: anywhere;
+    }
+
+    .day-header-summary {
+      margin: 12px 0 0;
+      max-width: 30rem;
+      font-size: 15px;
+      line-height: 1.78;
+      color: rgba(255, 243, 228, 0.9);
+    }
+
+    .day-route {
+      display: contents;
+    }
+
+    .route-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 241, 226, 0.18);
+      background: rgba(255, 248, 240, 0.11);
+      font-size: 12px;
+      line-height: 1.2;
+      color: rgba(255, 243, 228, 0.94);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    .day-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 34px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(255, 248, 240, 0.16);
+      border: 1px solid rgba(255, 241, 226, 0.18);
+      font-size: 12px;
+      color: rgba(255, 243, 228, 0.96);
+      line-height: 1.2;
+      text-align: center;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    .badge-stack {
+      position: relative;
+      z-index: 1;
+      margin-top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: flex-start;
+      justify-content: flex-start;
+    }
+
+    .day-pill-grid {
+      max-width: 100%;
+    }
+
+    .day-brief {
+      margin-top: 18px;
+    }
+
+    .brief-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .brief-item + .brief-item {
+      padding-top: 14px;
+      border-top: 1px dashed rgba(72, 53, 30, 0.12);
+    }
+
+    .brief-label {
+      margin: 0 0 8px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #3d2f20;
+    }
+
+    .brief-copy {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.7;
+      color: #342a22;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      align-items: flex-start;
+      justify-content: flex-start;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--day-color) 11%, #fff);
+      border: 1px solid color-mix(in srgb, var(--day-color) 26%, rgba(74, 55, 28, 0.08));
+      font-size: 12px;
+      color: #49351d;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+      white-space: nowrap;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    .chip[href]:hover,
+    .chip[href]:focus-visible {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 18px rgba(71, 48, 19, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    }
+
+    .section-block {
+      margin-top: 18px;
+      padding: 18px;
+      border-radius: 26px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 251, 246, 0.74));
+      border: 1px solid rgba(72, 53, 30, 0.08);
+      box-shadow: var(--card-shadow);
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .section-title {
+      margin: 0;
+      font-family: "Trip Serif SC", "Noto Serif SC", "Songti SC", serif;
+      font-size: 20px;
+      letter-spacing: -0.03em;
+    }
+
+    .section-note {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .transit-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .transit-item + .transit-item {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(72, 53, 30, 0.1);
+    }
+
+    .transit-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #3d2f20;
+    }
+
+    .transit-copy {
+      margin-top: 4px;
+      font-size: 13px;
+      line-height: 1.7;
+      color: #665748;
+    }
+
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .gallery-card {
+      position: relative;
+      display: block;
+      width: 100%;
+      padding: 0;
+      border: 0;
+      overflow: hidden;
+      border-radius: 22px;
+      background: #d8cab6;
+      box-shadow: 0 14px 28px rgba(47, 31, 15, 0.08);
+      cursor: zoom-in;
+    }
+
+    .gallery-card img {
+      display: block;
+      width: 100%;
+      height: auto;
+      transition: transform 0.26s ease;
+    }
+
+    .gallery-card:hover img,
+    .gallery-card:focus-visible img {
+      transform: scale(1.03);
+    }
+
+    .gallery-card:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--day-color) 56%, #fff);
+      outline-offset: 3px;
+    }
+
+    .gallery-card::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 0;
+      height: 54%;
+      background: linear-gradient(180deg, transparent, rgba(19, 11, 5, 0.3));
+      pointer-events: none;
+    }
+
+    .gallery-caption {
+      position: absolute;
+      inset: auto 12px 12px;
+      z-index: 1;
+      font-size: 12px;
+      color: rgba(255, 248, 240, 0.95);
+      text-shadow: 0 2px 10px rgba(12, 6, 2, 0.4);
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(34, 21, 10, 0.24);
+      backdrop-filter: blur(6px);
+    }
+
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: grid;
+      place-items: center;
+      padding: 22px;
+      background: rgba(18, 13, 9, 0.82);
+      backdrop-filter: blur(14px);
+    }
+
+    .lightbox[hidden] {
+      display: none;
+    }
+
+    .lightbox-figure {
+      position: relative;
+      margin: 0;
+      max-width: min(980px, 96vw);
+      max-height: 88vh;
+    }
+
+    .lightbox-image {
+      display: block;
+      max-width: 100%;
+      max-height: 82vh;
+      width: auto;
+      height: auto;
+      border-radius: 20px;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.42);
+      background: #eee3d2;
+    }
+
+    .lightbox-caption {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(255, 248, 240, 0.16);
+      color: rgba(255, 248, 240, 0.92);
+      font-size: 13px;
+      backdrop-filter: blur(8px);
+    }
+
+    .lightbox-caption a {
+      color: #fff8f0;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    .lightbox-close {
+      position: fixed;
+      top: max(18px, env(safe-area-inset-top));
+      right: max(18px, env(safe-area-inset-right));
+      width: 42px;
+      height: 42px;
+      border: 1px solid rgba(255, 248, 240, 0.24);
+      border-radius: 999px;
+      background: rgba(255, 248, 240, 0.14);
+      color: #fff8f0;
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+    }
+
+    .markdown-body {
+      font-size: 14px;
+      line-height: 1.85;
+      color: #2f261f;
+    }
+
+    .markdown-body > *:first-child {
+      margin-top: 0;
+    }
+
+    .markdown-body h3,
+    .markdown-body h4 {
+      margin: 18px 0 8px;
+      font-family: "Trip Serif SC", "Noto Serif SC", "Songti SC", serif;
+      line-height: 1.28;
+      letter-spacing: -0.02em;
+      color: #241c15;
+    }
+
+    .markdown-body h3 {
+      font-size: 21px;
+    }
+
+    .markdown-body h4 {
+      font-size: 17px;
+    }
+
+    .markdown-body p {
+      margin: 8px 0;
+    }
+
+    .markdown-body ul,
+    .markdown-body ol {
+      margin: 8px 0 12px;
+      padding-left: 20px;
+    }
+
+    .markdown-body li + li {
+      margin-top: 5px;
+    }
+
+    .markdown-body blockquote {
+      margin: 12px 0;
+      padding: 12px 14px;
+      border-left: 3px solid color-mix(in srgb, var(--day-color) 44%, rgba(72, 53, 30, 0.1));
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--day-color) 8%, #fff);
+      color: #5e5143;
+    }
+
+    .markdown-body a {
+      color: #8d4f16;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(141, 79, 22, 0.24);
+    }
+
+    .markdown-body strong {
+      color: #1f1610;
+    }
+
+    .source-card {
+      margin-top: 18px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255, 250, 244, 0.72);
+      border: 1px solid rgba(72, 53, 30, 0.08);
+      font-size: 13px;
+      line-height: 1.7;
+      color: #625445;
+    }
+
+    .day-header,
+    .info-card,
+    .section-block,
+    .source-card {
+      animation: fadeLift 0.42s ease both;
+    }
+
+    @keyframes fadeLift {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .day-content-inner.is-refreshing .day-header,
+    .day-content-inner.is-refreshing .info-card,
+    .day-content-inner.is-refreshing .section-block,
+    .day-content-inner.is-refreshing .source-card {
+      animation: fadeLiftRefresh 0.34s ease both;
+    }
+
+    @keyframes fadeLiftRefresh {
+      from {
+        opacity: 0.72;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .source-card code {
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: rgba(88, 61, 24, 0.07);
+      color: #5b4529;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+      font-size: 12px;
+    }
+
+    .leaflet-control-attribution {
+      font-size: 10px;
+    }
+
+    @media (max-width: 1020px) {
+      .app-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .panel {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: min(72vh, 760px);
+        padding: 12px 14px calc(16px + env(safe-area-inset-bottom));
+        border-left: none;
+        border-top: 1px solid rgba(84, 60, 28, 0.08);
+        border-radius: 28px 28px 0 0;
+        box-shadow: 0 -18px 42px rgba(38, 25, 12, 0.14);
+        transform: translateY(var(--panel-offset, 0px));
+        transition: transform 0.28s ease;
+        will-change: transform;
+        touch-action: pan-x;
+      }
+
+      .mobile-map-hitarea {
+        display: block;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: min(72vh, 760px);
+        z-index: 3;
+        background: transparent;
+        border: 0;
+        padding: 0;
+        margin: 0;
+      }
+
+      .panel::before {
+        inset: 14px 14px 10px;
+      }
+
+      .panel.is-dragging {
+        transition: none;
+      }
+
+      .panel.is-collapsed .day-content {
+        pointer-events: none;
+      }
+
+      .panel-handle {
+        display: block;
+        width: 48px;
+        height: 5px;
+        margin: 0 auto 10px;
+        border-radius: 999px;
+        background: rgba(102, 82, 56, 0.28);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+      }
+
+      .hero-card {
+        display: none;
+      }
+
+      .panel-title {
+        font-size: 24px;
+      }
+
+      .panel-top {
+        display: none;
+      }
+
+      .day-tab {
+        min-width: 84px;
+        padding: 10px 12px;
+      }
+
+      .day-content {
+        padding-right: 0;
+        overflow-x: hidden;
+      }
+
+      .day-header {
+        padding: 18px;
+        border-radius: 24px;
+      }
+
+      .day-brief .section-head {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .day-header-title {
+        font-size: clamp(23px, 6vw, 31px);
+        line-height: 1.12;
+        word-break: break-all;
+      }
+
+      .gallery {
+        grid-template-columns: 1fr;
+      }
+
+      .section-block {
+        border-radius: 22px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .mobile-map-hitarea {
+        bottom: min(76vh, 820px);
+      }
+
+      .panel {
+        height: min(76vh, 820px);
+      }
+
+      .day-header-top {
+        display: block;
+      }
+
+      .badge-stack {
+        margin-top: 12px;
+        justify-content: flex-start;
+      }
+
+      .day-header-summary {
+        max-width: none;
+        margin-top: 10px;
+      }
+
+      .day-header-title {
+        max-width: 315px;
+        text-wrap: pretty;
+      }
+
+      .day-route {
+        gap: 6px;
+      }
+
+      .route-pill,
+      .day-badge {
+        font-size: 11px;
+      }
+
+      .section-block,
+      .source-card {
+        border-radius: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <section class="map-stage">
+      <div id="map"></div>
+      <button class="mobile-map-hitarea" id="mobile-map-hitarea" type="button" aria-label="显示全部路线并收起卡片"></button>
+    </section>
+
+    <aside class="panel" aria-label="行程详情面板">
+      <div class="panel-handle" aria-hidden="true"></div>
+      <div class="day-tabs" id="day-tabs"></div>
+
+      <div class="day-content">
+        <div class="day-content-inner">
+          <section class="day-header">
+            <div class="day-header-top">
+              <div>
+                <p class="day-header-kicker" id="day-kicker">Day 1 · 市中心轻量开局</p>
+                <h3 class="day-header-title" id="day-title">到站、放包、中山广场、中山路、西塔</h3>
+                <p class="day-header-summary" id="day-summary"></p>
+              </div>
+            </div>
+            <div class="badge-stack day-pill-grid">
+              <span class="day-badge" id="crowd-badge"></span>
+              <span class="day-badge" id="mood-badge"></span>
+              <div class="day-route" id="day-route"></div>
+            </div>
+          </section>
+
+          <section class="section-block day-brief">
+            <div class="section-head">
+              <h4 class="section-title">当天速览</h4>
+              <span class="section-note">交通、吃饭和玩法先看这里</span>
+            </div>
+            <div class="brief-list">
+              <div class="brief-item">
+                <p class="brief-label">交通</p>
+                <p class="brief-copy" id="transport-note"></p>
+              </div>
+              <div class="brief-item">
+                <p class="brief-label">吃饭</p>
+                <div class="chips" id="food-chips"></div>
+              </div>
+              <div class="brief-item">
+                <p class="brief-label">玩法</p>
+                <div class="chips" id="highlight-chips"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="section-block">
+            <div class="section-head">
+              <h4 class="section-title">当天交通线</h4>
+              <span class="section-note">自驾主线，火车返程要留余量</span>
+            </div>
+            <ul class="transit-list" id="transit-list"></ul>
+          </section>
+
+          <section class="section-block">
+            <div class="section-head">
+              <h4 class="section-title">当天照片</h4>
+              <span class="section-note">本地示意图，可点击放大</span>
+            </div>
+            <div class="gallery" id="photo-gallery"></div>
+          </section>
+
+          <section class="section-block">
+            <div class="section-head">
+              <h4 class="section-title">当天详细说明</h4>
+              <span class="section-note">会跟随整体和 DAY 切换同步刷新</span>
+            </div>
+            <article class="markdown-body" id="day-article"></article>
+          </section>
+
+          <section class="source-card" id="source-card"></section>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="lightbox" id="image-lightbox" hidden>
+    <button class="lightbox-close" id="lightbox-close" type="button" aria-label="关闭大图">×</button>
+    <figure class="lightbox-figure">
+      <img class="lightbox-image" id="lightbox-image" alt="" />
+      <figcaption class="lightbox-caption" id="lightbox-caption"></figcaption>
+    </figure>
+  </div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script src="trip-data.js"></script>
+  <script>
+    const data = window.TRIP_DATA;
+    const map = L.map("map", {
+      zoomControl: false,
+      attributionControl: true
+    }).setView([39.6, 115.1], 8);
+    window.__tripMap = map;
+
+    L.control.zoom({ position: "bottomright" }).addTo(map);
+
+    L.tileLayer(
+      "https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}",
+      {
+        subdomains: ["1", "2", "3", "4"],
+        maxZoom: 18,
+        attribution: "Tiles &copy; 高德地图"
+      }
+    ).addTo(map);
+
+    const $ = (id) => document.getElementById(id);
+    const panel = document.querySelector(".panel");
+    const panelHandle = document.querySelector(".panel-handle");
+    const dayTabs = $("day-tabs");
+    const mobileMapHitarea = $("mobile-map-hitarea");
+    const dayContentInner = document.querySelector(".day-content-inner");
+    const lightbox = $("image-lightbox");
+    const lightboxImage = $("lightbox-image");
+    const lightboxCaption = $("lightbox-caption");
+    const lightboxClose = $("lightbox-close");
+    $("source-card").innerHTML = `这份网页当前读取的是知识库里的 <code>${escapeHtml(data.meta.sourceNote)}</code>。以后你只要改这份笔记，再让我执行一次同步脚本，网站内容就会一起刷新。最近同步时间：<code>${escapeHtml(data.meta.generatedAt)}</code>`;
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function renderInline(text) {
+      let value = escapeHtml(String(text).replace(/<br\s*\/?>\s*/gi, ""));
+      value = value.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      value = value.replace(/`([^`]+)`/g, "<code>$1</code>");
+      value = value.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+      return value;
+    }
+
+    function renderMarkdown(markdown) {
+      const lines = markdown.replace(/\r/g, "").split("\n");
+      const html = [];
+      let paragraph = [];
+      let listType = null;
+      let listItems = [];
+      let quoteLines = [];
+
+      function flushParagraph() {
+        if (!paragraph.length) return;
+        const cleanParagraph = paragraph.filter((line) => !/^参考[:：]?$/.test(line));
+        if (cleanParagraph.length) {
+          html.push(`<p>${renderInline(cleanParagraph.join(" "))}</p>`);
+        }
+        paragraph = [];
+      }
+
+      function flushList() {
+        if (!listType || !listItems.length) return;
+        html.push(`<${listType}>${listItems.map((item) => `<li>${renderInline(item)}</li>`).join("")}</${listType}>`);
+        listType = null;
+        listItems = [];
+      }
+
+      function flushQuote() {
+        if (!quoteLines.length) return;
+        html.push(`<blockquote>${quoteLines.map((line) => `<p>${renderInline(line)}</p>`).join("")}</blockquote>`);
+        quoteLines = [];
+      }
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+
+        if (!line) {
+          flushParagraph();
+          flushList();
+          flushQuote();
+          continue;
+        }
+
+        if (line.startsWith("> ")) {
+          flushParagraph();
+          flushList();
+          quoteLines.push(line.slice(2));
+          continue;
+        }
+
+        if (/^####\s+/.test(line)) {
+          flushParagraph();
+          flushList();
+          flushQuote();
+          html.push(`<h4>${renderInline(line.replace(/^####\s+/, ""))}</h4>`);
+          continue;
+        }
+
+        if (/^###\s+/.test(line)) {
+          flushParagraph();
+          flushList();
+          flushQuote();
+          html.push(`<h3>${renderInline(line.replace(/^###\s+/, ""))}</h3>`);
+          continue;
+        }
+
+        if (/^\d+\.\s+/.test(line)) {
+          flushParagraph();
+          flushQuote();
+          const item = line.replace(/^\d+\.\s+/, "");
+          if (listType !== "ol") {
+            flushList();
+            listType = "ol";
+          }
+          listItems.push(item);
+          continue;
+        }
+
+        if (/^- /.test(line)) {
+          flushParagraph();
+          flushQuote();
+          const item = line.replace(/^- /, "");
+          if (listType !== "ul") {
+            flushList();
+            listType = "ul";
+          }
+          listItems.push(item);
+          continue;
+        }
+
+        flushList();
+        flushQuote();
+        paragraph.push(line);
+      }
+
+      flushParagraph();
+      flushList();
+      flushQuote();
+      return html.join("");
+    }
+
+    const panelState = {
+      offset: 0,
+      collapsedOffset: 0,
+      collapsed: false,
+      dragging: false,
+      pointerId: null,
+      startY: 0,
+      startOffset: 0
+    };
+
+    function isMobilePanelMode() {
+      return window.matchMedia("(max-width: 1020px)").matches;
+    }
+
+    function getPanelPeekHeight() {
+      return 128;
+    }
+
+    function setPanelOffset(offset, resetScroll = false) {
+      const clamped = Math.max(0, Math.min(offset, panelState.collapsedOffset));
+      panelState.offset = clamped;
+      panelState.collapsed = clamped > panelState.collapsedOffset * 0.5;
+      panel.style.setProperty("--panel-offset", `${clamped}px`);
+      panel.classList.toggle("is-collapsed", panelState.collapsed);
+      if (resetScroll) {
+        panel.querySelector(".day-content").scrollTop = 0;
+      }
+    }
+
+    function updatePanelMetrics() {
+      if (!isMobilePanelMode()) {
+        panelState.collapsedOffset = 0;
+        setPanelOffset(0);
+        return;
+      }
+      panelState.collapsedOffset = Math.max(0, panel.offsetHeight - getPanelPeekHeight());
+      setPanelOffset(panelState.collapsed ? panelState.collapsedOffset : 0);
+    }
+
+    function snapPanel(collapsed, resetScroll = collapsed) {
+      setPanelOffset(collapsed ? panelState.collapsedOffset : 0, resetScroll);
+      if (isMobilePanelMode() && mapLayers[activeDay]) {
+        updateMapFocus(activeDay);
+      }
+    }
+
+    function showMapOverview() {
+      if (panelState.dragging) return;
+      mapOverviewMode = true;
+      if (isMobilePanelMode()) {
+        setPanelOffset(panelState.collapsedOffset, false);
+      }
+      renderDayTabs();
+      updateMapFocus(activeDay);
+    }
+
+    function handleDayTabSelect(index) {
+      const wasOverview = mapOverviewMode;
+      const wasCollapsed = panelState.collapsed;
+      const isSwitchingDay = mapOverviewMode || index !== activeDay;
+
+      if (isSwitchingDay) {
+        setActiveDay(index, { preserveCollapsed: wasOverview ? true : wasCollapsed });
+        return;
+      }
+
+      snapPanel(!panelState.collapsed, false);
+    }
+
+    function canDragPanel(target) {
+      if (!isMobilePanelMode()) return false;
+      if (target.closest(".day-tab, .day-tabs, .chip, .gallery-card, a, button")) {
+        return Boolean(target.closest(".panel-handle"));
+      }
+      if (panelState.collapsed) return true;
+      if (target.closest(".panel-handle") || target.closest(".panel-top") || target.closest(".day-tabs")) {
+        return true;
+      }
+      return panel.querySelector(".day-content").scrollTop <= 0;
+    }
+
+    panel.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "mouse" && !event.target.closest(".panel-handle")) return;
+      if (!canDragPanel(event.target)) return;
+      panelState.dragging = true;
+      panelState.pointerId = event.pointerId;
+      panelState.startY = event.clientY;
+      panelState.startOffset = panelState.offset;
+      panel.classList.add("is-dragging");
+    });
+
+    panel.addEventListener("pointermove", (event) => {
+      if (!panelState.dragging || event.pointerId !== panelState.pointerId) return;
+      const deltaY = event.clientY - panelState.startY;
+      const contentAtTop = panel.querySelector(".day-content").scrollTop <= 0;
+      if (panelState.collapsed || contentAtTop || panelState.startOffset > 0 || deltaY < 0) {
+        event.preventDefault();
+        setPanelOffset(panelState.startOffset + deltaY);
+      }
+    });
+
+    function endPanelDrag(event) {
+      if (!panelState.dragging || event.pointerId !== panelState.pointerId) return;
+      panelState.dragging = false;
+      panel.classList.remove("is-dragging");
+      const shouldCollapse = panelState.offset > panelState.collapsedOffset * 0.42;
+      snapPanel(shouldCollapse);
+      panelState.pointerId = null;
+    }
+
+    panel.addEventListener("pointerup", endPanelDrag);
+    panel.addEventListener("pointercancel", endPanelDrag);
+    panelHandle.addEventListener("click", () => snapPanel(!panelState.collapsed));
+    mobileMapHitarea.addEventListener("click", showMapOverview);
+    panel.addEventListener("click", (event) => {
+      if (!isMobilePanelMode() || !panelState.collapsed || panelState.dragging) return;
+      if (event.target.closest(".day-tab")) return;
+      if (event.target.closest(".day-tabs")) return;
+      if (event.target.closest("a")) return;
+      snapPanel(false);
+    });
+    window.addEventListener("resize", updatePanelMetrics);
+
+    function iconHtml(color, num) {
+      return `<div class="day-marker" style="background:${color}">${num}</div>`;
+    }
+
+    function tooltipOffset(dayIndex, pointIndex) {
+      const customOffsets = {
+        "2-2": [28, -10],
+        "2-3": [-56, 26]
+      };
+      const customKey = `${dayIndex}-${pointIndex}`;
+      if (customOffsets[customKey]) {
+        return customOffsets[customKey];
+      }
+
+      const offsets = [
+        [0, -14], [0, 20], [22, 0], [-22, 0], [16, -18], [-18, 18]
+      ];
+      return offsets[(dayIndex + pointIndex) % offsets.length];
+    }
+
+    const mapLayers = [];
+    const allBounds = [];
+
+    data.days.forEach((day, dayIndex) => {
+      const latlngs = day.points.map((point, pointIndex) => {
+        const latlng = L.latLng(point.lat, point.lon);
+        allBounds.push(latlng);
+        const marker = L.marker(latlng, {
+          icon: L.divIcon({
+            className: "",
+            html: iconHtml(day.color, pointIndex + 1),
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+          })
+        }).bindTooltip(`${day.label} · ${pointIndex + 1}. ${point.name}`, {
+          permanent: true,
+          direction: "top",
+          offset: tooltipOffset(dayIndex, pointIndex),
+          className: "map-label"
+        });
+        return { marker, latlng };
+      });
+
+      const polyline = L.polyline(latlngs.map((item) => item.latlng), {
+        color: day.color,
+        weight: 4,
+        opacity: 0.92,
+        smoothFactor: 0,
+        lineCap: "round",
+        lineJoin: "round",
+        dashArray: day.dashed ? "10 8" : null
+      });
+
+      mapLayers.push({
+        dayIndex,
+        day,
+        markers: latlngs.map((item) => item.marker),
+        bounds: L.latLngBounds(latlngs.map((item) => item.latlng)),
+        polyline
+      });
+    });
+
+    function getFitOptions() {
+      if (isMobilePanelMode()) {
+        const visiblePanelHeight = Math.max(0, panel.offsetHeight - panelState.offset);
+        return {
+          paddingTopLeft: [16, 16],
+          paddingBottomRight: [16, Math.max(144, Math.round(visiblePanelHeight + 24))],
+          maxZoom: mapOverviewMode ? 13 : 16
+        };
+      }
+
+      return {
+        paddingTopLeft: [28, 28],
+        paddingBottomRight: [28, 28],
+        maxZoom: 16
+      };
+    }
+
+    let focusRequestId = 0;
+
+    function queueBoundsFocus(bounds) {
+      focusRequestId += 1;
+      const requestId = focusRequestId;
+      map.stop();
+      map.invalidateSize({ pan: false });
+      window.setTimeout(() => {
+        if (requestId !== focusRequestId) return;
+        map.flyToBounds(bounds, {
+          ...getFitOptions(),
+          animate: true,
+          duration: 0.42
+        });
+      }, 24);
+    }
+
+    function focusAllBounds() {
+      queueBoundsFocus(L.latLngBounds(allBounds));
+    }
+
+    function focusDayBounds(dayIndex) {
+      const layer = mapLayers[dayIndex];
+      if (!layer) return;
+      queueBoundsFocus(layer.bounds);
+    }
+
+    let activeDay = 0;
+    let mapOverviewMode = false;
+    let refreshMotionTimer = null;
+
+    function replayContentMotion() {
+      dayContentInner.classList.remove("is-refreshing");
+      void dayContentInner.offsetWidth;
+      dayContentInner.classList.add("is-refreshing");
+      window.clearTimeout(refreshMotionTimer);
+      refreshMotionTimer = window.setTimeout(() => {
+        dayContentInner.classList.remove("is-refreshing");
+      }, 380);
+    }
+
+    function renderChips(container, items) {
+      container.innerHTML = "";
+      items.forEach((item) => {
+        const chip = item.url ? document.createElement("a") : document.createElement("span");
+        chip.className = "chip";
+        chip.textContent = item.label ?? item;
+        if (item.url) {
+          chip.href = item.url;
+          chip.target = "_blank";
+          chip.rel = "noreferrer";
+          chip.title = item.name ? `${item.name} · ${item.area ?? ""}` : chip.textContent;
+        }
+        container.appendChild(chip);
+      });
+    }
+
+    function renderTransit(items) {
+      const list = $("transit-list");
+      list.innerHTML = "";
+      items.forEach((item) => {
+        const li = document.createElement("li");
+        li.className = "transit-item";
+        li.innerHTML = `
+          <div class="transit-title">${escapeHtml(item.title)}</div>
+          <div class="transit-copy">${escapeHtml(item.copy)}</div>
+        `;
+        list.appendChild(li);
+      });
+    }
+
+    function renderGallery(day) {
+      const gallery = $("photo-gallery");
+      gallery.innerHTML = "";
+      day.photos.forEach((photo) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "gallery-card";
+        button.setAttribute("aria-label", `查看大图：${photo.caption}`);
+        const credit = photo.credit ? ` · ${photo.credit}` : "";
+        button.innerHTML = `
+          <img src="${photo.src}" alt="${escapeHtml(photo.alt)}" loading="lazy" />
+          <span class="gallery-caption">${escapeHtml(photo.caption + credit)}</span>
+        `;
+        button.addEventListener("click", () => openLightbox(photo));
+        gallery.appendChild(button);
+      });
+    }
+
+    function openLightbox(photo) {
+      lightboxImage.src = photo.src;
+      lightboxImage.alt = photo.alt;
+      const credit = photo.credit ? ` · ${escapeHtml(photo.credit)}` : "";
+      const sourceLink = photo.sourceUrl
+        ? ` <a href="${escapeHtml(photo.sourceUrl)}" target="_blank" rel="noreferrer">查看来源</a>`
+        : "";
+      lightboxCaption.innerHTML = `<span>${escapeHtml(photo.caption)}${credit}</span>${sourceLink}`;
+      lightbox.hidden = false;
+    }
+
+    function closeLightbox() {
+      lightbox.hidden = true;
+      lightboxImage.removeAttribute("src");
+      lightboxImage.alt = "";
+      lightboxCaption.textContent = "";
+    }
+
+    lightboxClose.addEventListener("click", closeLightbox);
+    lightbox.addEventListener("click", (event) => {
+      if (event.target === lightbox) closeLightbox();
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !lightbox.hidden) closeLightbox();
+    });
+
+    function updateMapFocus(dayIndex) {
+      mapLayers.forEach((layer, index) => {
+        const isActive = mapOverviewMode || index === dayIndex;
+        const leafletLayers = [layer.polyline, ...layer.markers];
+
+        leafletLayers.forEach((leafletLayer) => {
+          if (isActive) {
+            if (!map.hasLayer(leafletLayer)) {
+              leafletLayer.addTo(map);
+            }
+          } else if (map.hasLayer(leafletLayer)) {
+            leafletLayer.removeFrom(map);
+          }
+        });
+
+        if (isActive) {
+          layer.polyline.setStyle({ weight: 4, opacity: 0.92 });
+          layer.polyline.bringToBack();
+          layer.markers.forEach((marker) => {
+            marker.setOpacity(1);
+          });
+        }
+      });
+
+      if (mapOverviewMode) {
+        focusAllBounds();
+      } else {
+        focusDayBounds(dayIndex);
+      }
+    }
+
+    function renderDayTabs() {
+      dayTabs.innerHTML = "";
+      const overviewButton = document.createElement("button");
+      overviewButton.type = "button";
+      overviewButton.className = `day-tab${mapOverviewMode ? " is-active" : ""}`;
+      overviewButton.style.setProperty("--day-color", data.days[activeDay]?.color ?? "#7b6243");
+      overviewButton.setAttribute("aria-label", "查看 Day 1 到 Day 5 的整体路线");
+      overviewButton.innerHTML = `<span class="day-tab-label">整体</span>`;
+      overviewButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        showMapOverview();
+      });
+      dayTabs.appendChild(overviewButton);
+
+      data.days.forEach((day, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `day-tab${!mapOverviewMode && index === activeDay ? " is-active" : ""}`;
+        button.style.setProperty("--day-color", day.color);
+        button.setAttribute("aria-label", `切换到 Day ${day.order}`);
+        button.innerHTML = `<span class="day-tab-label">DAY ${day.order}</span>`;
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          handleDayTabSelect(index);
+        });
+        dayTabs.appendChild(button);
+      });
+    }
+
+    function setActiveDay(dayIndex, options = {}) {
+      const preserveCollapsed = options.preserveCollapsed ?? panelState.collapsed;
+      activeDay = dayIndex;
+      mapOverviewMode = false;
+      const day = data.days[dayIndex];
+      document.documentElement.style.setProperty("--day-color", day.color);
+
+      $("day-kicker").textContent = `${day.label} · ${day.kicker}`;
+      $("day-title").textContent = day.title;
+      $("day-summary").textContent = day.summary;
+      $("crowd-badge").textContent = `人流 · ${day.crowd}`;
+      $("mood-badge").textContent = `节奏 · ${day.mood}`;
+      $("transport-note").textContent = day.transportNote;
+      $("day-article").innerHTML = renderMarkdown(day.markdown);
+
+      const dayRoute = $("day-route");
+      dayRoute.innerHTML = "";
+      day.route.forEach((stop) => {
+        const span = document.createElement("span");
+        span.className = "route-pill";
+        span.textContent = stop;
+        dayRoute.appendChild(span);
+      });
+
+      renderChips($("food-chips"), day.food);
+      renderChips($("highlight-chips"), day.highlights);
+      renderTransit(day.transit);
+      renderGallery(day);
+      renderDayTabs();
+      updatePanelMetrics();
+      if (isMobilePanelMode()) {
+        setPanelOffset(preserveCollapsed ? panelState.collapsedOffset : 0, false);
+      }
+      updateMapFocus(dayIndex);
+      replayContentMotion();
+      dayTabs.children[dayIndex + 1]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
+
+    updatePanelMetrics();
+    focusAllBounds();
+    setActiveDay(0);
+  </script>
+</body>
+</html>
